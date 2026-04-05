@@ -1,0 +1,28 @@
+services:
+  qwen-asr:
+    image: vllm/vllm-openai:v0.19.0
+    container_name: qwen-asr-serve
+    entrypoint: ["/bin/bash", "-c"]
+    command: >
+      "pip install vllm[audio] && 
+      vllm serve ${MODEL_NAME:-Qwen/Qwen3-ASR-1.7B}
+      --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION:-0.8}
+      --host ${VLLM_HOST:-0.0.0.0}
+      --port ${VLLM_PORT:-8001}
+      --download-dir ${DOWNLOAD_DIR:-/root/.cache/huggingface/hub}
+      --max-model-len ${MAX_MODEL_LEN:-8192}
+      --max-num-seqs ${MAX_NUM_SEQS:-4}"
+    ports:
+      - "${VLLM_PORT:-8001}:8001"
+    volumes:
+      - vllm-cache:${DOWNLOAD_DIR:-/root/.cache/huggingface/hub}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+volumes:
+  vllm-cache:
