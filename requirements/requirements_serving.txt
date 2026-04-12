@@ -1,0 +1,4 @@
+ray[serve]==2.50.0
+python-multipart==0.0.20
+# Config
+toml==0.10.2
