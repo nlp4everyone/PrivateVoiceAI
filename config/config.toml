@@ -1,0 +1,17 @@
+[system]
+AUDIO_TEMP_DIR="/dev/shm"
+DEPLOYMENT_NAME="ASRService"
+RAY_HOST="0.0.0.0"
+RAY_PORT=8000
+
+[serving]
+NUM_GPUS=1
+NUM_REPLICAS=1
+MAX_ONGOING_REQUESTS=16
+MAX_BATCH_SIZE=8
+BATCH_WAIT_TIMEOUT_S=0.1
+
+[asr]
+ASR_MODEL_NAME="nvidia/parakeet-ctc-0.6b-vi"
+ASR_DEVICE="auto"
+
