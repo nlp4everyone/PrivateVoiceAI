@@ -1,8 +1,7 @@
 .env
 .idea/
 Note.txt
-benchmarks/__pycache__
+examples/__pycache__
 app/schema/transcription/__pycache__/
 app/schema/language/__pycache__/
 app/utils/language_detect/__pycache__/
-benchmarks/__pycache__/
