@@ -1,0 +1,31 @@
+services:
+  vad-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: vad-service
+    ports:
+      - "${RAY_FASTAPI_PORT:-8000}:8000"   # Inference API
+      - "${RAY_DASHBOARD_PORT:-8265}:8265" # Dashboard API
+    environment:
+      - HF_HOME=/home/ray/.cache/huggingface
+      - RAY_memory_monitor_refresh_ms=0
+      - RAY_object_store_memory=4294967296
+      - RAY_DASHBOARD_HOST=0.0.0.0
+    volumes:
+      - ${HOME}/.cache/huggingface:/home/ray/.cache/huggingface
+      - type: tmpfs
+        target: /tmp
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    shm_size: "16gb"
+    tmpfs:
+      - /dev/shm:size=16g
+    restart: unless-stopped
+
+

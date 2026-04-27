@@ -1,0 +1,8 @@
+transformers==4.41.2
+tiktoken==0.9.0
+# For language detection
+pycld2==0.42
+# Cuda
+Cython==3.2.0
+cuda-python==13.0.2
+soundfile==0.13.0
