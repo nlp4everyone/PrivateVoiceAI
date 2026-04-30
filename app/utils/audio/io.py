@@ -72,9 +72,8 @@ def estimate_audio_duration(audio_bytes: bytes) -> float:
         Duration in seconds as a float
     """
     with io.BytesIO(audio_bytes) as f:
-        data, samplerate = sf.read(f)
-        duration = len(data) / samplerate
-    return duration
+        info = sf.info(f)
+        return info.frames / info.samplerate
 
 
 def is_audio_file(data: bytes,
