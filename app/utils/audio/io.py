@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import List
-import uuid, os, subprocess, io, magic
+import uuid, os, subprocess, io, magic, torchaudio, torch
 import soundfile as sf
 magic_mime = magic.Magic(mime=True)
 
@@ -74,6 +74,30 @@ def estimate_audio_duration(audio_bytes: bytes) -> float:
     with io.BytesIO(audio_bytes) as f:
         info = sf.info(f)
         return info.frames / info.samplerate
+
+
+def load_audio(audio_bytes: bytes) -> torch.Tensor:
+    """
+    Load audio from bytes and normalize to 16kHz mono waveform tensor.
+
+    Args:
+        audio_bytes: Raw audio data bytes
+
+    Returns:
+        torch.Tensor: Normalized waveform tensor (1, samples) at 16kHz
+    """
+    # Load audio from bytes into waveform tensor and sample rate
+    waveform, sr = torchaudio.load(io.BytesIO(audio_bytes))
+
+    # Resample to 16kHz if the original sample rate is different
+    if sr != 16000:
+        waveform = torchaudio.functional.resample(waveform, sr, 16000)
+
+    # Convert stereo to mono by averaging channels if needed
+    if waveform.shape[0] > 1:  # stereo → mono
+        waveform = waveform.mean(dim=0, keepdim=True)
+
+    return waveform
 
 
 def is_audio_file(data: bytes,

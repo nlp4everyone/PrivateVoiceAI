@@ -13,9 +13,11 @@ from pyannote.audio.pipelines import VoiceActivityDetection
 from app.schema.vad import BaseVADDetector
 from app.schema.segment import VADSegment
 # Typing
-from typing import Literal, List
+from typing import Literal, List, Union
 # Other components
 import torch, logging
+# Utils
+from app.utils.audio.io import load_audio
 # Logger
 logger = logging.getLogger("ray.serve")
 
@@ -152,32 +154,39 @@ class PyannoteVADDetector(BaseVADDetector):
         return SUPPORTED_VAD_MODELS
     
     def detect(self,
-               audio: str,
+               audio: Union[str, bytes],
                precision: int = 3) -> List[VADSegment]:
         """
-        Detect voice activity in an audio file.
-        
-        This method processes the audio file through the VAD pipeline to identify
+        Detect voice activity in an audio file or bytes.
+
+        This method processes the audio through the VAD pipeline to identify
         speech segments and returns them as a list of VADSegment objects.
-        
+
         Args:
-            audio (str): Path to the audio file to process.
+            audio (Union[str, bytes]): Path to the audio file or raw audio bytes.
             precision (int): Number of decimal places for timestamp rounding.
                            Defaults to 3.
-        
+
         Returns:
             List[VADSegment]: List of detected speech segments, where each segment
                             contains start and end timestamps in seconds.
-        
+
         Raises:
             FileNotFoundError: If the audio file doesn't exist.
             Exception: For other VAD processing errors.
         """
-        # Run VAD pipeline on the audio file to detect speech segments
-        result = self._pipeline(audio)
+        # Handle different input types: bytes or file path
+        if isinstance(audio, bytes):
+            # Convert raw audio bytes to normalized waveform tensor (16kHz mono)
+            waveform = load_audio(audio)
+            # Run VAD pipeline on the waveform tensor
+            result = self._pipeline({"waveform": waveform, "sample_rate": 16000})
+        else:
+            # Run VAD pipeline directly on the audio file path
+            result = self._pipeline(audio)
 
         # Convert pyannote Segments to VADSegment objects with rounded timestamps
-        # Itertracks yields (segment, track, label) tuples, we only need the segment
+        # itertracks yields (segment, track, label) tuples; we only need the segment
         segments = []
         for segment, _, _ in result.itertracks(yield_label=True):
             segments.append(VADSegment(

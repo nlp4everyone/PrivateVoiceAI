@@ -14,9 +14,7 @@ from app.core.config.system import *
 from app.core.config.serving import *
 from app.core.config.vad import *
 # Utils
-from app.utils.audio.io import (save_temp_audio,
-                                clean_up_temp_audio,
-                                estimate_audio_duration,
+from app.utils.audio.io import (estimate_audio_duration,
                                 is_audio_file)
 # Schema
 from app.schema.vad import (VoiceActivityResponse,
@@ -65,22 +63,17 @@ class VADService:
         """
         Initialize the VAD service.
 
-        Sets up the VAD model using factory pattern and temporary directory for audio processing.
+        Sets up the VAD model using factory pattern.
         Raises RuntimeError if model initialization fails.
         """
         # Initialize VAD model using factory pattern with configuration
         self._vad_model = VADFactory.create(model_name=VAD_MODEL_NAME,
                                             device=VAD_DEVICE,
                                             token=HF_TOKEN)
-        
+
         # Validate model initialization
         if self._vad_model is None:
             raise RuntimeError(f"Failed to initialize VAD model: {VAD_MODEL_NAME}")
-
-        # Setup temporary directory for audio file processing
-        self.tmp_dir = Path(AUDIO_TEMP_DIR)
-        if not self.tmp_dir.exists():
-            os.makedirs(self.tmp_dir, exist_ok=True)
 
 
     @vad_app.post("/v1/audio/activity_detections",
@@ -120,37 +113,23 @@ class VADService:
             file_extension = Path(file.filename).suffix.lstrip('.') if file.filename else ""
             raise UnsupportedFileFormatException(file_format = file_extension)
 
-        # Save audio bytes to temporary file for VAD model processing
-        # VAD models typically require file paths rather than byte streams
-        temp_audio_path = save_temp_audio(audio_bytes)
-        
-        try:
-            # Run VAD detection on the audio file
-            # precision=3 rounds timestamps to 3 decimal places (milliseconds)
-            vad_segments: List[VADSegment] = self._vad_model.detect(
-                audio=temp_audio_path,
-                precision=3
-            )
-            
-            # Convert internal VADSegment objects to API response format
-            segments_data = [
-                VoiceActivitySegment(start=segment.start, end=segment.end)
-                for segment in vad_segments
-            ]
-            # Estimate duration
-            duration = estimate_audio_duration(audio_bytes)
+        # Run VAD detection directly on audio bytes
+        # precision=3 rounds timestamps to 3 decimal places (milliseconds)
+        vad_segments: List[VADSegment] = self._vad_model.detect(
+            audio=audio_bytes,
+            precision=3
+        )
 
-            # Return structured response with detected speech segments
-            return VoiceActivityResponse(
-                duration=round(duration,3),
-                segments=segments_data
-            )
-            
-        except Exception as e:
-            # Log and re-raise any processing errors
-            logger.error(f"VAD processing failed: {str(e)}")
-            raise ValueError(f"VAD processing failed: {str(e)}")
-            
-        finally:
-            # Ensure temporary audio file is cleaned up regardless of success/failure
-            clean_up_temp_audio([temp_audio_path])
+        # Convert internal VADSegment objects to API response format
+        segments_data = [
+            VoiceActivitySegment(start=segment.start, end=segment.end)
+            for segment in vad_segments
+        ]
+        # Estimate duration
+        duration = estimate_audio_duration(audio_bytes)
+
+        # Return structured response with detected speech segments
+        return VoiceActivityResponse(
+            duration=round(duration,3),
+            segments=segments_data
+        )
