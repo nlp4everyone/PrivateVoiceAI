@@ -15,22 +15,34 @@ from app.core.config.serving import *
 from app.core.config.vad import *
 # Utils
 from app.utils.audio.io import (save_temp_audio,
-                                clean_up_temp_audio)
+                                clean_up_temp_audio,
+                                estimate_audio_duration,
+                                is_audio_file)
 # Schema
-from app.schema.vad import VoiceActivityResponse, VoiceActivitySegment
+from app.schema.vad import (VoiceActivityResponse,
+                            VoiceActivitySegment)
 from app.schema.segment import VADSegment
 # Custom exceptions
-from app.exceptions.vad import VADModelNotFoundException
+from app.exceptions.vad import VADModelNotFoundException, UnsupportedFileFormatException
 from app.exceptions.handlers import common_exception_handler
 import logging, os
 
 logger = logging.getLogger("ray.serve")
 
+# Define tags metadata for API documentation
+tags_metadata = [
+    {
+        "name": "VAD",
+        "description": "Contains operations related to Voice Activity Detection",
+    },
+]
+
 # Initialize FastAPI application for VAD service
-vad_app = FastAPI()
+vad_app = FastAPI(openapi_tags=tags_metadata)
 
 # Register custom exception handler for VAD model not found errors
 vad_app.add_exception_handler(VADModelNotFoundException, common_exception_handler)
+vad_app.add_exception_handler(UnsupportedFileFormatException, common_exception_handler)
 
 @serve.deployment(ray_actor_options={"num_gpus": NUM_GPUS},
                   num_replicas=NUM_REPLICAS,
@@ -71,37 +83,45 @@ class VADService:
             os.makedirs(self.tmp_dir, exist_ok=True)
 
 
-    @vad_app.post("/v1/audio/activity_detections", response_model = VoiceActivityResponse)
-    async def vad_endpoint(self,
-                           file: UploadFile = File(...),
-                           model: str = Form(VAD_MODEL_NAME)):
+    @vad_app.post("/v1/audio/activity_detections",
+                  name="Detects voice activity segments in audio files with precise timestamps.",
+                  response_model = VoiceActivityResponse,
+                  tags=["VAD"])
+    async def detect_voice_activity(self,
+                                    file: UploadFile = File(...),
+                                    model: str = Form(VAD_MODEL_NAME)):
         """
-        Voice Activity Detection endpoint for audio files.
+        ## Detects voice activity segments in audio files with precise timestamps.
 
-        Accepts audio uploads and returns segments where speech is detected.
-        Processes the audio using the configured VAD model.
+        ### Args:
+        - `file`: Audio file to process for voice activity detection
+        - `model`: VAD model name (must match configured model)
 
-        Args:
-            file: Audio file to process for voice activity detection
-            model: VAD model name (must match configured model)
+        ### Returns:
+        - `VoiceActivityResponse`: Response containing detected speech segments with start/end timestamps
 
-        Returns:
-            VoiceActivityResponse: Response containing detected speech segments with start/end timestamps
-
-        Raises:
-            VADModelNotFoundException: If requested model is not available
-            ValueError: If audio processing fails
+        ### Raises:
+        - `VADModelNotFoundException`: If requested model is not available
+        - `ValueError`: If audio processing fails
         """
         logger.info(f"VAD request received - model: {model}")
 
         # Validate that requested model matches the loaded model
+        # This ensures the client requests a model that is actually available
         if model != self._vad_model.model_name:
             raise VADModelNotFoundException(model=model)
 
-        # Read uploaded audio file into memory
+        # Read uploaded audio file into memory for validation and processing
         audio_bytes = await file.read()
+        
+        # Validate that the uploaded file is a valid audio format
+        if not is_audio_file(audio_bytes):
+            # Extract file extension from filename without the dot (e.g., "mp3", "wav")
+            file_extension = Path(file.filename).suffix.lstrip('.') if file.filename else ""
+            raise UnsupportedFileFormatException(file_format = file_extension)
 
-        # Save audio bytes to temporary file for processing
+        # Save audio bytes to temporary file for VAD model processing
+        # VAD models typically require file paths rather than byte streams
         temp_audio_path = save_temp_audio(audio_bytes)
         
         try:
@@ -117,9 +137,12 @@ class VADService:
                 VoiceActivitySegment(start=segment.start, end=segment.end)
                 for segment in vad_segments
             ]
-            
+            # Estimate duration
+            duration = estimate_audio_duration(audio_bytes)
+
             # Return structured response with detected speech segments
             return VoiceActivityResponse(
+                duration=round(duration,3),
                 segments=segments_data
             )
             

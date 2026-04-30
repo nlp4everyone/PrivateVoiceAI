@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import List
-import uuid, os, subprocess, io
+import uuid, os, subprocess, io, magic
 import soundfile as sf
+magic_mime = magic.Magic(mime=True)
 
 def save_temp_audio(audio_bytes: bytes,
                     sample_rate :int = 16000) -> Path:
@@ -74,3 +75,30 @@ def estimate_audio_duration(audio_bytes: bytes) -> float:
         data, samplerate = sf.read(f)
         duration = len(data) / samplerate
     return duration
+
+
+def is_audio_file(data: bytes,
+                  buffer_size: int = 2048) -> bool:
+    """
+    Check if the given bytes represent an audio file.
+
+    Args:
+        data: Raw bytes to check for audio content
+        buffer_size: Number of bytes to read from the data for MIME detection (default: 2048)
+
+    Returns:
+        True if the data appears to be an audio file, False otherwise
+    """
+    try:
+        if not data:
+            return False
+
+        # Only need a small prefix
+        mime = magic_mime.from_buffer(data[:buffer_size])
+
+        return mime.startswith("audio/") or mime in {
+            "application/ogg",  # common edge case
+        }
+
+    except Exception:
+        return False

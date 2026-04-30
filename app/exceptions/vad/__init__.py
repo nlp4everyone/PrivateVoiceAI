@@ -1,1 +1,2 @@
-from .base import VADModelNotFoundException
+from .base import (VADModelNotFoundException,
+                   UnsupportedFileFormatException)

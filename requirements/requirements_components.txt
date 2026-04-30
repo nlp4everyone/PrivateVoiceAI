@@ -6,3 +6,5 @@ pycld2==0.42
 Cython==3.2.0
 cuda-python==13.0.2
 soundfile==0.13.0
+# Detect audio
+python-magic==0.4.27
