@@ -5,4 +5,7 @@ pycld2==0.42
 # Cuda
 Cython==3.2.0
 cuda-python==13.0.2
+# Audio
 soundfile==0.13.0
+torchaudio==2.11.0
+torchcodec==0.11.1
