@@ -27,11 +27,11 @@ TOML-based configuration system for system settings, serving parameters, and ASR
 
 Clone this project:
 ```
-git clone https://github.com/nlp4everyone/VoiceEngine.git
+git clone https://github.com/nlp4everyone/PrivateVoiceAI.git
 ```
 Go inside project:
 ```
-cd VoiceEngine/
+cd PrivateVoiceAI/
 ```
 Fetch all branches:
 ```
@@ -142,6 +142,19 @@ Key configuration parameters in `config/config.toml`:
 - `BATCH_WAIT_TIMEOUT_S`: Batch wait timeout in seconds
 - `ASR_MODEL_NAME`: HuggingFace model identifier
 - `ASR_DEVICE`: Device selection (auto/cpu/cuda)
+
+# 📋 To-Do / Roadmap
+
+### 🤖 Support Model
+- [x] Add multi-language model support (nvidia/parakeet-ctc-0.6b-vi,nvidia/parakeet-tdt-0.6b-v3)
+
+### 🔧 Refactor Code
+- [ ] Improve error handling and exception management
+- [ ] Add comprehensive logging throughout the codebase
+
+### ⚡ Optimization
+- [ ] Optimize audio preprocessing pipeline
+- [ ] Add GPU memory optimization and cleanup
 
 # 📚 Model Citation
 
