@@ -1,5 +1,7 @@
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Any
+from pathlib import Path
 from app.schema.transcription import TranscriptionType
+from app.schema.transcription.response import TranscriptionResult
 
 
 def get_timestamp_indices(timestamp_granularities: List[Union[str, None]]) -> Tuple[List[int], List[int]]:
@@ -48,3 +50,53 @@ def get_transcription_type(type: Union[str, None]) -> TranscriptionType:
         return TranscriptionType.Segment
     else:
         return TranscriptionType.Text
+
+
+def process_batch_transcription(asr_model: Any,
+                                audio_paths: List[Path],
+                                timestamp_granularities: List[Union[str, None]]) -> List[TranscriptionResult]:
+    """
+    Transcribe multiple audio files in batch.
+
+    Optimizes performance by grouping requests with similar timestamp requirements
+    and processing them together. Supports both timestamped and non-timestamped
+    transcriptions in the same batch.
+
+    Args:
+        asr_model: ASR model instance to use for transcription
+        audio_paths: List of paths to audio files to transcribe
+        timestamp_granularities: List specifying timestamp requirements for each file
+
+    Returns:
+        List of transcription results corresponding to input files
+    """
+    # Convert Path objects to strings for ASR model compatibility
+    audio_paths = [str(path) for path in audio_paths]
+
+    # Separate requests by timestamp requirements for optimization
+    ts_indices, no_ts_indices = get_timestamp_indices(timestamp_granularities)
+
+    # Initialize output array
+    outputs: List[Union[Any]] = [None] * len(timestamp_granularities)
+
+    # Process files without timestamps (more efficient)
+    if no_ts_indices:
+        transcriptions = asr_model.transcribe_audio(
+            audio=audio_paths,
+            enable_timestamps=False
+        )
+        # Map results back to original request order
+        for local_idx, global_idx in enumerate(no_ts_indices):
+            outputs[global_idx] = transcriptions[local_idx]
+
+    # Process files with timestamps (word/segment level)
+    if ts_indices:
+        transcriptions = asr_model.transcribe_audio(
+            audio=audio_paths,
+            enable_timestamps=True
+        )
+        # Map results back to original request order
+        for local_idx, global_idx in enumerate(ts_indices):
+            outputs[global_idx] = transcriptions[local_idx]
+
+    return outputs
