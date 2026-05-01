@@ -81,7 +81,7 @@ def process_batch_transcription(asr_model: Any,
 
     # Process files without timestamps (more efficient)
     if no_ts_indices:
-        transcriptions = asr_model.transcribe_audio(
+        transcriptions = asr_model.transcribe(
             audio=audio_paths,
             enable_timestamps=False
         )
@@ -91,7 +91,7 @@ def process_batch_transcription(asr_model: Any,
 
     # Process files with timestamps (word/segment level)
     if ts_indices:
-        transcriptions = asr_model.transcribe_audio(
+        transcriptions = asr_model.transcribe(
             audio=audio_paths,
             enable_timestamps=True
         )

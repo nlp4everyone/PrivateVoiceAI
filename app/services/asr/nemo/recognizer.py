@@ -11,6 +11,12 @@ from typing import Literal, Union, List
 import torch, logging, os
 logger = logging.getLogger("ray.serve")
 
+# List of supported NVIDIA Parakeet models for ASR
+SUPPORTED_MODELS = [
+    "nvidia/parakeet-ctc-0.6b-vi",
+    "nvidia/parakeet-tdt-0.6b-v3"
+]
+
 
 def convert_ts_to_float(value):
     """
@@ -28,19 +34,37 @@ def convert_ts_to_float(value):
     return value
 
 class ParakeetRecognizer(BaseRecognizer):
+    """
+    NVIDIA NeMo Parakeet ASR model recognizer implementation.
+
+    The model automatically handles device selection (CUDA/CPU) and provides
+    word-level and segment-level timestamp information when requested.
+    """
+
     def __init__(self,
                  model_name :str = "nvidia/parakeet-ctc-0.6b-vi",
                  device :Literal["cuda","cpu","auto"] = "auto"):
         """
-        Initialize the Parakeet recognizer.
-        
+        Initialize the Parakeet recognizer with a pretrained model.
+
         Args:
             model_name (str): Name of the pretrained model to load. 
                              Defaults to Vietnamese Parakeet CTC model.
             device (Literal["cuda","cpu","auto"]): Device to use for inference.
                                                    "auto" automatically selects CUDA if available.
         """
+        # Initialize parent class with model name
         super().__init__(model_name = model_name)
+        
+        # Validate model name is supported
+        if model_name not in SUPPORTED_MODELS:
+            logger.error(f"Model '{model_name}' is not supported. Supported models: {SUPPORTED_MODELS}")
+            # Fallback to default model name
+            self._model_name = SUPPORTED_MODELS[0]
+            logger.warning(f"Using default ASR model: {self._model_name}")
+        else:
+            logger.info(f"Started ASR model:'{model_name}'")
+        
         # Define device - auto-detect CUDA availability if "auto" is specified
         if device == "auto":
             self._device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -53,7 +77,7 @@ class ParakeetRecognizer(BaseRecognizer):
             self._device = "cpu"
         
         # Initialize the pretrained NeMo ASR model
-        self.model = nemo_asr.models.ASRModel.from_pretrained(model_name= model_name)
+        self.model = nemo_asr.models.ASRModel.from_pretrained(model_name= self._model_name)
         
         # Move model to appropriate device for inference
         if self._device == "cuda":
@@ -63,7 +87,7 @@ class ParakeetRecognizer(BaseRecognizer):
         self.model.eval()
 
     @property
-    def model_name(self):
+    def model_name(self) -> str:
         """
         Get the name of the loaded model.
         
@@ -72,9 +96,20 @@ class ParakeetRecognizer(BaseRecognizer):
         """
         return self._model_name
 
-    def transcribe_audio(self,
-                         audio :Union[str,bytes,List[str]],
-                         enable_timestamps :bool = False) -> List[TranscriptionResult]:
+    @property
+    def supported_models(self) -> List[str]:
+        """
+        Get the list of supported models.
+
+        Returns:
+            List[str]: The list of supported model names
+        """
+        return SUPPORTED_MODELS
+
+    def transcribe(self,
+                   audio :Union[str,bytes,List[str]],
+                   enable_timestamps :bool = False,
+                   precision: int = 3) -> List[TranscriptionResult]:
         """
         Transcribe audio files to text using the Parakeet model.
         
@@ -83,6 +118,8 @@ class ParakeetRecognizer(BaseRecognizer):
                                                Can be a single path or list of paths.
             enable_timestamps (bool): Whether to include word and segment timestamps.
                                     When True, provides detailed timing information.
+            precision (int): Number of decimal places to round timestamps to.
+                           Defaults to 3.
         
         Returns:
             List[TranscriptionResult]: List of transcription results, one per audio file.
@@ -123,11 +160,13 @@ class ParakeetRecognizer(BaseRecognizer):
 
             # Convert raw timestamp data to structured objects
             for (batched_word, batched_segment) in zip(batched_word_timestamps, batched_segment_timestamps):
-                # Convert word timestamps to TranscribedWord objects
-                detailed_word_timestamps.append([TranscribedWord.model_validate(object) for object in batched_word])
+                # Convert word timestamps to TranscribedWord objects with rounded timestamps
+                detailed_word_timestamps.append([TranscribedWord(start=round(object.get("start"), precision),
+                                                                 end=round(object.get("end"), precision),
+                                                                 word=object.get("word")) for object in batched_word])
                 # Convert segment timestamps to TranscribedSegment objects
-                detailed_segment_timestamps.append([TranscribedSegment(start=object.get("start"),
-                                                                       end=object.get("end"),
+                detailed_segment_timestamps.append([TranscribedSegment(start=round(object.get("start"), precision),
+                                                                       end=round(object.get("end"), precision),
                                                                        text=object.get("segment")) for object in
                                                     batched_segment])
 

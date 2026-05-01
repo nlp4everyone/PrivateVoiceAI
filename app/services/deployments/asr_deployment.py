@@ -3,7 +3,7 @@ from fastapi import UploadFile, File, Form, FastAPI
 # Ray Serve for deployment
 from ray import serve
 # Type hints
-from typing import Union, Optional, Literal
+from typing import Union
 # ASR Model
 from app.services.asr import RecognizerFactory
 # File system utilities
@@ -185,7 +185,7 @@ class ASRService:
         elif output_type == TranscriptionType.Word:
             # Word-level transcription with timestamps
             lang_property = await asyncio.to_thread(LanguageDetector.detect, transcription_result.text, True)
-            duration = await asyncio.to_thread(estimate_audio_duration, audio_bytes)
+            duration = round(await asyncio.to_thread(estimate_audio_duration, audio_bytes), 3)
             return WordResponse(
                 text=transcription_result.text,
                 language=lang_property.language,
@@ -197,7 +197,7 @@ class ASRService:
         elif output_type == TranscriptionType.Segment:
             # Segment-level transcription with timestamps
             lang_property = await asyncio.to_thread(LanguageDetector.detect, transcription_result.text, True)
-            duration = await asyncio.to_thread(estimate_audio_duration, audio_bytes)
+            duration = round(await asyncio.to_thread(estimate_audio_duration, audio_bytes), 3)
 
             # Build segment list with IDs
             segments = []
