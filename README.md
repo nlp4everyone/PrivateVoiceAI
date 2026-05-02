@@ -117,6 +117,11 @@ Run the provided example to test transcription:
 python examples/audio_transcription_example.py
 ```
 
+Run concurrent requests example to test batch processing:
+```bash
+python examples/concurrent_requests_example.py
+```
+
 ### 🔹 API Endpoints
 
 The service provides OpenAI-compatible endpoints:
@@ -149,11 +154,11 @@ Key configuration parameters in `config/config.toml`:
 - [x] Add multi-language model support (nvidia/parakeet-ctc-0.6b-vi,nvidia/parakeet-tdt-0.6b-v3)
 
 ### 🔧 Refactor Code
-- [ ] Improve error handling and exception management
+- [x] Improve error handling and exception management (02/05/2026)
 - [ ] Add comprehensive logging throughout the codebase
 
 ### ⚡ Optimization
-- [ ] Optimize audio preprocessing pipeline
+- [x] Optimize audio preprocessing pipeline (01/05/2026)
 - [ ] Add GPU memory optimization and cleanup
 
 # 📚 Model Citation
