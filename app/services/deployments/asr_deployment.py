@@ -6,17 +6,12 @@ from ray import serve
 from typing import Union
 # ASR Model
 from app.services.asr import RecognizerFactory
-# File system utilities
-from pathlib import Path
-import os
-
 # Configuration imports
 from app.core.config.system import *
 from app.core.config.serving import *
 from app.core.config.asr import *
 # Utils
-from app.utils.audio import (save_temp_audio,
-                             clean_up_temp_audio,
+from app.utils.audio import (load_audio_from_bytes,
                              estimate_audio_duration)
 from app.utils.transcription.helper import (get_transcription_type,
                                             process_batch_transcription)
@@ -70,7 +65,7 @@ class ASRService:
         """
         Initialize the ASR service.
 
-        Sets up the ASR model and temporary directory for audio processing.
+        Sets up the ASR model.
         Raises RuntimeError if model initialization fails.
         """
         # Initialize ASR model using factory pattern with configuration
@@ -81,11 +76,6 @@ class ASRService:
         if self._asr_model is None:
             raise RuntimeError(f"Failed to initialize ASR model: {ASR_MODEL_NAME}")
 
-        # Setup temporary directory for audio files
-        self.tmp_dir = Path(AUDIO_TEMP_DIR)
-        if not self.tmp_dir.exists():
-            os.makedirs(self.tmp_dir, exist_ok=True)
-
     @serve.batch(max_batch_size=MAX_BATCH_SIZE,
                  batch_wait_timeout_s=BATCH_WAIT_TIMEOUT_S)
     async def batched_transcribe(self,
@@ -95,7 +85,7 @@ class ASRService:
         Batched transcription endpoint with Ray Serve automatic batching.
 
         Automatically batches individual requests for improved throughput.
-        Handles temporary file management and cleanup.
+        Converts audio bytes to tensors directly without temporary files.
 
         Args:
             batch: List of audio data as bytes
@@ -104,18 +94,13 @@ class ASRService:
         Returns:
             List of transcription results
         """
-        # Save audio bytes to temporary files
-        audio_paths = [save_temp_audio(audio_bytes) for audio_bytes in batch]
-
-        try:
-            # Process transcriptions
-            transcriptions = process_batch_transcription(asr_model=self._asr_model,
-                                                         audio_paths=audio_paths,
-                                                         timestamp_granularities=timestamp_granularities)
-            return transcriptions
-        finally:
-            # Clean up temporary files
-            clean_up_temp_audio(audio_paths)
+        # Convert audio bytes to tensors
+        audio_tensors = [load_audio_from_bytes(audio_bytes) for audio_bytes in batch]
+        # Process transcriptions
+        transcriptions = process_batch_transcription(asr_model=self._asr_model,
+                                                     audio_data=audio_tensors,
+                                                     timestamp_granularities=timestamp_granularities)
+        return transcriptions
 
     @asr_app.post("/v1/audio/transcriptions",
                   name="Transcribe audio files with optional timestamps",
@@ -161,7 +146,6 @@ class ASRService:
             timestamp_granularity
         )
 
-        logger.info(timestamp_granularity)
         # Determine response format based on granularity
         output_type = get_transcription_type(timestamp_granularity)
 
@@ -169,6 +153,7 @@ class ASRService:
         if output_type == TranscriptionType.Text:
             # Simple text transcription with token usage
             output_tokens = await asyncio.to_thread(approximate_count_tokens, transcription_result.text)
+            # Return transcription response
             return TranscriptionResponse(
                 text=transcription_result.text,
                 usage=Usage(
@@ -184,8 +169,10 @@ class ASRService:
 
         elif output_type == TranscriptionType.Word:
             # Word-level transcription with timestamps
-            lang_property = await asyncio.to_thread(LanguageDetector.detect, transcription_result.text, True)
-            duration = round(await asyncio.to_thread(estimate_audio_duration, audio_bytes), 3)
+            lang_property = LanguageDetector.detect(transcription_result.text, True)
+            duration = round(estimate_audio_duration(audio_bytes), 3)
+
+            # Return transcription response
             return WordResponse(
                 text=transcription_result.text,
                 language=lang_property.language,
@@ -196,8 +183,8 @@ class ASRService:
 
         elif output_type == TranscriptionType.Segment:
             # Segment-level transcription with timestamps
-            lang_property = await asyncio.to_thread(LanguageDetector.detect, transcription_result.text, True)
-            duration = round(await asyncio.to_thread(estimate_audio_duration, audio_bytes), 3)
+            lang_property = LanguageDetector.detect(transcription_result.text, True)
+            duration = round(estimate_audio_duration(audio_bytes), 3)
 
             # Build segment list with IDs
             segments = []
@@ -209,6 +196,7 @@ class ASRService:
                     text=segment.text
                 ))
 
+            # Return transcription response
             return SegmentResponse(
                 text=transcription_result.text,
                 language=lang_property.language,

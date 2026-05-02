@@ -8,7 +8,7 @@ import nemo.collections.asr as nemo_asr
 # Typing
 from typing import Literal, Union, List
 # Dependencies
-import torch, logging, os
+import torch, logging
 logger = logging.getLogger("ray.serve")
 
 # List of supported NVIDIA Parakeet models for ASR
@@ -107,15 +107,15 @@ class ParakeetRecognizer(BaseRecognizer):
         return SUPPORTED_MODELS
 
     def transcribe(self,
-                   audio :Union[str,bytes,List[str]],
+                   audio :Union[str,bytes,List[str],torch.Tensor,List[torch.Tensor]],
                    enable_timestamps :bool = False,
                    precision: int = 3) -> List[TranscriptionResult]:
         """
         Transcribe audio files to text using the Parakeet model.
         
         Args:
-            audio (Union[str,bytes,List[str]]): Audio file path(s) to transcribe.
-                                               Can be a single path or list of paths.
+            audio (Union[str,bytes,List[str],torch.Tensor,List[torch.Tensor]]): Audio file path(s) or tensor(s) to transcribe.
+                                               Can be a single path/tensor or list of paths/tensors.
             enable_timestamps (bool): Whether to include word and segment timestamps.
                                     When True, provides detailed timing information.
             precision (int): Number of decimal places to round timestamps to.
@@ -130,18 +130,11 @@ class ParakeetRecognizer(BaseRecognizer):
             Exception: For other transcription errors.
         """
         # Normalize input to list format for consistent processing
-        if isinstance(audio,str): audio = [audio]
-        
-        # Validate all audio file paths exist before processing
-        for audio_path in audio:
-            if not os.path.exists(audio_path):
-                logger.error(f"Audio file not found: {audio_path}")
-                raise FileNotFoundError(f"Audio file not found: {audio_path}")
-        
+        if isinstance(audio, (str, torch.Tensor)): audio = [audio]
+
         # Perform transcription with error handling
         try:
-            # Call the NeMo model for transcription
-            results = self.model.transcribe(audio, timestamps = enable_timestamps)
+            results = self.model.transcribe(audio, timestamps=enable_timestamps)
 
             # Extract text from all results
             transcriptions = [result.text for result in results]
