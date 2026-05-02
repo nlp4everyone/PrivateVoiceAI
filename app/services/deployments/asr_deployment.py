@@ -17,6 +17,7 @@ from app.utils.transcription.helper import (get_transcription_type,
                                             process_batch_transcription)
 from app.utils.token_counter import approximate_count_tokens
 from app.utils.language_detect import LanguageDetector
+from app.utils.audio import is_audio_file
 # Schema
 from app.schema.transcription.response import *
 from app.schema.transcription.base import AdvancedTranscribedSegment
@@ -24,8 +25,11 @@ from app.schema.transcription.type import TranscriptionType
 from app.schema.transcription.base.usage import *
 # Custom exceptions
 from app.exceptions.transcription import TranscriptedModelNotFoundException
+from app.exceptions.audio import UnsupportedAudioFormatException
 from app.exceptions.handlers import common_exception_handler
+# Other utils
 import logging, math, asyncio
+from pathlib import Path
 
 logger = logging.getLogger("ray.serve")
 
@@ -42,6 +46,7 @@ asr_app = FastAPI(openapi_tags=tags_metadata)
 
 # Register custom exception handler for ASR model not found errors
 asr_app.add_exception_handler(TranscriptedModelNotFoundException, common_exception_handler)
+asr_app.add_exception_handler(UnsupportedAudioFormatException, common_exception_handler)
 
 @serve.deployment(ray_actor_options={"num_gpus": NUM_GPUS},
                   num_replicas=NUM_REPLICAS,
@@ -139,8 +144,15 @@ class ASRService:
         # Read uploaded audio file into memory for validation and processing
         audio_bytes = await file.read()
 
+        # Validate that the uploaded file is a valid audio format
+        if not is_audio_file(audio_bytes):
+            # Extract file extension from filename without the dot (e.g., "mp3", "wav")
+            file_extension = Path(file.filename).suffix.lstrip('.') if file.filename else ""
+            raise UnsupportedAudioFormatException(file_format=file_extension)
+
         # Get deployment handle and process transcription
         handle = serve.get_deployment_handle(DEPLOYMENT_NAME)
+        # Get the result
         transcription_result: TranscriptionResult = await handle.batched_transcribe.remote(
             audio_bytes,
             timestamp_granularity

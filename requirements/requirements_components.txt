@@ -9,3 +9,5 @@ cuda-python==13.0.2
 soundfile==0.13.0
 torchaudio==2.11.0
 torchcodec==0.11.1
+# Detect audio
+python-magic==0.4.27
