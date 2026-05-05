@@ -1,64 +1,32 @@
-# FastAPI components
-from fastapi import UploadFile, File, Form, FastAPI
 # Ray Serve for deployment
 from ray import serve
 # Type hints
-from typing import Union
+from typing import Union, List
 # ASR Model
 from app.services.asr import RecognizerFactory
 # Configuration imports
-from app.core.config.system import *
 from app.core.config.serving import *
 from app.core.config.asr import *
 # Utils
-from app.utils.audio import (load_audio_from_bytes,
-                             estimate_audio_duration)
-from app.utils.transcription.helper import (get_transcription_type,
-                                            process_batch_transcription)
-from app.utils.token_counter import approximate_count_tokens
-from app.utils.language_detect import LanguageDetector
-from app.utils.audio import is_audio_file
+from app.utils.audio import load_audio_from_bytes
+from app.utils.transcription.helper import process_batch_transcription
+import torch
+import asyncio
 # Schema
-from app.schema.transcription.response import *
-from app.schema.transcription.base import AdvancedTranscribedSegment
-from app.schema.transcription.type import TranscriptionType
-from app.schema.transcription.base.usage import *
-# Custom exceptions
-from app.exceptions.transcription import TranscriptedModelNotFoundException
-from app.exceptions.audio import UnsupportedAudioFormatException
-from app.exceptions.handlers import common_exception_handler
-# Other utils
-import logging, math, asyncio
-from pathlib import Path
+from app.schema.transcription import TranscriptionResult
+import logging
 
 logger = logging.getLogger("ray.serve")
 
-# Define tags metadata for API documentation
-tags_metadata = [
-    {
-        "name": "Audio",
-        "description": "Endpoints for interacting with ASR models"
-    },
-]
-
-# Initialize FastAPI application for ASR service
-asr_app = FastAPI(openapi_tags=tags_metadata)
-
-# Register custom exception handler for ASR model not found errors
-asr_app.add_exception_handler(TranscriptedModelNotFoundException, common_exception_handler)
-asr_app.add_exception_handler(UnsupportedAudioFormatException, common_exception_handler)
-
-@serve.deployment(ray_actor_options={"num_gpus": NUM_GPUS},
-                  num_replicas=NUM_REPLICAS,
-                  max_ongoing_requests=MAX_ONGOING_REQUESTS)
-@serve.ingress(asr_app)
-class ASRService:
+@serve.deployment(ray_actor_options={"num_gpus": ASR_NUM_GPUS},
+                  num_replicas=ASR_NUM_REPLICAS,
+                  max_ongoing_requests=ASR_MAX_ONGOING_REQUESTS)
+class ASRDeployment:
     """
-    Ray Serve deployment for ASR (Automatic Speech Recognition) service.
+    Ray Serve deployment for ASR (Automatic Speech Recognition).
 
-    This class handles audio transcription requests using configurable ASR models.
-    It supports batch processing for improved throughput and provides different
-    transcription formats based on client requirements.
+    This class handles audio transcription using configurable ASR models.
+    It supports batch processing for improved throughput.
 
     The deployment is configured with:
     - GPU resources based on NUM_GPUS configuration
@@ -68,9 +36,9 @@ class ASRService:
 
     def __init__(self):
         """
-        Initialize the ASR service.
+        Initialize the ASR deployment.
 
-        Sets up the ASR model.
+        Sets up the ASR model using factory pattern.
         Raises RuntimeError if model initialization fails.
         """
         # Initialize ASR model using factory pattern with configuration
@@ -81,8 +49,8 @@ class ASRService:
         if self._asr_model is None:
             raise RuntimeError(f"Failed to initialize ASR model: {ASR_MODEL_NAME}")
 
-    @serve.batch(max_batch_size=MAX_BATCH_SIZE,
-                 batch_wait_timeout_s=BATCH_WAIT_TIMEOUT_S)
+    @serve.batch(max_batch_size=ASR_MAX_BATCH_SIZE,
+                 batch_wait_timeout_s=ASR_BATCH_WAIT_TIMEOUT_S)
     async def batched_transcribe(self,
                                  batch: List[bytes],
                                  timestamp_granularities: List[Union[str, None]]):
@@ -100,119 +68,46 @@ class ASRService:
             List of transcription results
         """
         # Convert audio bytes to tensors
-        audio_tensors = [load_audio_from_bytes(audio_bytes) for audio_bytes in batch]
+        audio_tensors = await asyncio.gather(*[load_audio_from_bytes(audio_bytes) for audio_bytes in batch])
         # Process transcriptions
         transcriptions = process_batch_transcription(asr_model=self._asr_model,
                                                      audio_data=audio_tensors,
                                                      timestamp_granularities=timestamp_granularities)
         return transcriptions
 
-    @asr_app.post("/v1/audio/transcriptions",
-                  name="Transcribe audio files with optional timestamps",
-                  tags=["Audio"])
-    async def transcribe_audio(self,
-                               file: UploadFile = File(...),
-                               model: str = Form(ASR_MODEL_NAME),
-                               timestamp_granularity: Optional[Literal["word", "segment"]] = Form(
-                                   default=None,
-                                   alias="timestamp_granularities[]",
-                                   description="Level of timestamp detail: 'word' for word-level timestamps, 'segment' for segment-level timestamps, or None for no timestamps"),
-                               response_format: str = Form("verbose_json")):
+    @serve.batch(max_batch_size=ASR_MAX_BATCH_SIZE,
+                 batch_wait_timeout_s=ASR_BATCH_WAIT_TIMEOUT_S)
+    async def batched_transcribe_tensors(self,
+                                         batch: List[torch.Tensor],
+                                         timestamp_granularities: List[Union[str, None]]):
         """
-        ## Transcribe audio files with optional timestamps.
+        Batched transcription endpoint for pre-loaded audio tensors.
 
-        ### Args:
-        - `file`: Audio file to transcribe
-        - `model`: ASR model name (must match configured model)
-        - `timestamp_granularity`: Level of timestamp detail (word/segment)
-        - `response_format`: Output format (currently verbose_json)
+        Optimized for VAD+ASR chaining where audio is already loaded as tensors.
+        Skips the bytes-to-tensor conversion step for improved latency.
 
-        ### Returns:
-        - Transcription response in requested format
+        Args:
+            batch: List of audio data as torch.Tensor
+            timestamp_granularities: Timestamp requirements for each audio file
 
-        ### Raises:
-        - `TranscriptedModelNotFoundException`: If requested model is not available
-        - `ValueError`: If audio processing fails
+        Returns:
+            List of transcription results
         """
-        logger.info(f"ASR request received - model: {model}")
+        # Process transcriptions directly on tensors (no conversion needed)
+        transcriptions = process_batch_transcription(asr_model=self._asr_model,
+                                                     audio_data=batch,
+                                                     timestamp_granularities=timestamp_granularities)
+        return transcriptions
 
-        # Validate that requested model matches the loaded model
-        # This ensures the client requests a model that is actually available
-        if model != self._asr_model.model_name:
-            raise TranscriptedModelNotFoundException(model=model)
+    async def __call__(self, audio_bytes: bytes, timestamp_granularity: Union[str, None] = None) -> TranscriptionResult:
+        """
+        Transcribe audio bytes.
 
-        # Read uploaded audio file into memory for validation and processing
-        audio_bytes = await file.read()
+        Args:
+            audio_bytes: Audio data as bytes
+            timestamp_granularity: Timestamp requirement (word/segment/None)
 
-        # Validate that the uploaded file is a valid audio format
-        if not is_audio_file(audio_bytes):
-            # Extract file extension from filename without the dot (e.g., "mp3", "wav")
-            file_extension = Path(file.filename).suffix.lstrip('.') if file.filename else ""
-            raise UnsupportedAudioFormatException(file_format=file_extension)
-
-        # Get deployment handle and process transcription
-        handle = serve.get_deployment_handle(DEPLOYMENT_NAME)
-        # Get the result
-        transcription_result: TranscriptionResult = await handle.batched_transcribe.remote(
-            audio_bytes,
-            timestamp_granularity
-        )
-
-        # Determine response format based on granularity
-        output_type = get_transcription_type(timestamp_granularity)
-
-        # Return appropriate response format
-        if output_type == TranscriptionType.Text:
-            # Simple text transcription with token usage
-            output_tokens = await asyncio.to_thread(approximate_count_tokens, transcription_result.text)
-            # Return transcription response
-            return TranscriptionResponse(
-                text=transcription_result.text,
-                usage=Usage(
-                    input_tokens=0,
-                    input_token_details=InputTokenDetails(
-                        text_tokens=0,
-                        audio_tokens=0
-                    ),
-                    output_tokens=output_tokens,
-                    total_tokens=output_tokens
-                )
-            )
-
-        elif output_type == TranscriptionType.Word:
-            # Word-level transcription with timestamps
-            lang_property = LanguageDetector.detect(transcription_result.text, True)
-            duration = round(estimate_audio_duration(audio_bytes), 3)
-
-            # Return transcription response
-            return WordResponse(
-                text=transcription_result.text,
-                language=lang_property.language,
-                duration=duration,
-                usage=DurationUsage(seconds=math.ceil(duration)),
-                words=[word.model_dump() for word in transcription_result.words]
-            )
-
-        elif output_type == TranscriptionType.Segment:
-            # Segment-level transcription with timestamps
-            lang_property = LanguageDetector.detect(transcription_result.text, True)
-            duration = round(estimate_audio_duration(audio_bytes), 3)
-
-            # Build segment list with IDs
-            segments = []
-            for index, segment in enumerate(transcription_result.segments):
-                segments.append(AdvancedTranscribedSegment(
-                    id=index,
-                    start=segment.start,
-                    end=segment.end,
-                    text=segment.text
-                ))
-
-            # Return transcription response
-            return SegmentResponse(
-                text=transcription_result.text,
-                language=lang_property.language,
-                duration=duration,
-                usage=DurationUsage(seconds=math.ceil(duration)),
-                segments=segments
-            )
+        Returns:
+            TranscriptionResult object
+        """
+        return await self.batched_transcribe.remote(audio_bytes, timestamp_granularity)
