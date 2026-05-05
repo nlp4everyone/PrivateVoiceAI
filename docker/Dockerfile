@@ -48,6 +48,9 @@ RUN python3.11 -m pip install --upgrade pip setuptools wheel
 # Install NVIDIA NeMo Toolkit for ASR capabilities
 # Version 2.7.2 with ASR features for Vietnamese speech recognition
 RUN python3.11 -m pip install nemo_toolkit['asr']==2.7.2
+# Install application-specific component dependencies
+COPY requirements/requirements_core.txt /app/requirements_core.txt
+RUN python3.11 -m pip install -r /app/requirements_core.txt
 
 # Install application-specific component dependencies
 COPY requirements/requirements_components.txt /app/requirements_components.txt
