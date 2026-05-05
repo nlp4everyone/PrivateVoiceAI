@@ -11,6 +11,22 @@ High-performance audio transcription using Ray Serve for distributed inference.
 
 Supports multi-format audio input (MP3, WAV, etc.) with automatic batching for improved throughput.
 
+### 🎯 Voice Activity Detection (VAD)
+
+Intelligent speech segment detection using configurable VAD models.
+
+Automatically identifies speech regions in audio files, enabling efficient processing of long recordings by focusing only on speech content.
+
+### 🔄 VAD + ASR Composition Pipeline
+
+Advanced pipeline architecture that chains VAD and ASR deployments for optimal performance:
+
+- **Two-stage processing**: VAD detects speech segments → ASR transcribes each segment
+- **Smart batching**: Speech segments are batched across requests for improved throughput
+- **Timestamp accuracy**: Word and segment-level timestamps are adjusted based on VAD segment offsets
+- **Resource efficiency**: Only speech content is processed, reducing computational overhead
+- **Scalable architecture**: Independent VAD and ASR deployments with configurable replicas
+
 ### 🧩 Local ASR Runtime
 
 Fully offline, GPU-accelerated ASR inference using NVIDIA NeMo toolkit.
@@ -39,7 +55,7 @@ git fetch
 ```
 Checkout the branch:
 ```
-git checkout ray/nvidia_asr
+git checkout ray/nvidia_asr_with_vad
 ```
 
 Create .env file from sample:
@@ -100,6 +116,8 @@ print(f"Processing time: {time.perf_counter() - begin:.2f}s")
 
 - 🧰 Runtime: Docker Compose with CUDA support
 
+- 🎯 VAD Model: Pyannote Speaker Segmentation ([pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0))
+
 - 🤖 ASR Model: NVIDIA Parakeet CTC ([parakeet-ctc-0.6b-vi](https://huggingface.co/nvidia/parakeet-ctc-0.6b-vi))
 
 - 🔧 ASR Toolkit: NVIDIA NeMo Toolkit v2.7.2
@@ -148,7 +166,20 @@ Key configuration parameters in `config/config.toml`:
 - `ASR_MODEL_NAME`: HuggingFace model identifier
 - `ASR_DEVICE`: Device selection (auto/cpu/cuda)
 
+# 🧪 Experimental Results
+
+Performance testing with `sample_vi.wav` using different batch sizes:
+
+| Batch Size | Max Time | Avg Time |
+|------------|----------|----------|
+| 4          | 0.394s   | 0.314s   |
+| 8          | 0.708s   | 0.514s   |
+
 # 📋 To-Do / Roadmap
+
+### 🎯 Voice Activity Detection (VAD)
+- [x] Implement VAD deployment for batched transcription (05/05/2026)
+- [x] Create ingress deployment with VAD+ASR pipeline integration (05/05/2026)
 
 ### 🤖 Support Model
 - [x] Add multi-language model support (nvidia/parakeet-ctc-0.6b-vi,nvidia/parakeet-tdt-0.6b-v3)
