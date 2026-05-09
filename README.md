@@ -127,6 +127,20 @@ Key configuration parameters in `config/config.toml`:
 - `VAD_MODEL_NAME`: VAD model identifier (HuggingFace)
 - `VAD_DEVICE`: Device selection for VAD (auto/cpu/cuda)
 
+<br />
+
+# 🧪 Experimental Results
+
+Performance testing with `sample_vi.wav` (8s duration) using different batch sizes:
+
+| Batch Size | Max Time | Avg Time |
+|------------|----------|----------|
+| 1          |          | 32.49ms  |
+| 4          | 104.89ms | 69.65ms  |
+| 8          | 220.43ms | 126.01ms |
+
+<br />
+
 # 📋 To-Do List
 
 ### 🔧 Core Features
