@@ -168,10 +168,11 @@ Key configuration parameters in `config/config.toml`:
 
 # 🧪 Experimental Results
 
-Performance testing with `sample_vi.wav` using different batch sizes:
+Performance testing with `sample_vi.wav` (8s duration) using different batch sizes:
 
 | Batch Size | Max Time | Avg Time |
 |------------|----------|----------|
+| 1          |          | 0.31s    |
 | 4          | 0.394s   | 0.314s   |
 | 8          | 0.708s   | 0.514s   |
 
