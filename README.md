@@ -148,6 +148,18 @@ Key configuration parameters in `config/config.toml`:
 - `ASR_MODEL_NAME`: HuggingFace model identifier
 - `ASR_DEVICE`: Device selection (auto/cpu/cuda)
 
+# 🧪 Experimental Results
+
+Performance testing with `sample_vi.wav` (8s duration) using different batch sizes:
+
+| Batch Size | Max Time | Avg Time |
+|------------|----------|----------|
+| 1          |          | 0.295s   |
+| 4          | 0.388s   | 0.313s   |
+| 8          | 0.413s   | 0.325s   |
+
+<br />
+
 # 📋 To-Do / Roadmap
 
 ### 🤖 Support Model

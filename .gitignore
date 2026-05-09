@@ -7,5 +7,6 @@ app/schema/language/__pycache__/
 app/schema/transcription/base/__pycache__/
 app/services/asr/__pycache__/
 app/services/asr/nemo/__pycache__/
+app/services/deployments/__pycache__/
 app/utils/__pycache__/
 app/utils/language_detect/__pycache__/
