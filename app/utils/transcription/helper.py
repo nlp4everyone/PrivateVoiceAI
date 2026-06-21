@@ -57,11 +57,11 @@ def process_batch_transcription(asr_model: Any,
                                 audio_data: Union[List[Path], List[torch.Tensor]],
                                 timestamp_granularities: List[Union[str, None]]) -> List[TranscriptionResult]:
     """
-    Transcribe multiple audio files in batch.
+    Transcribe multiple audio files in batch using a single GPU call.
 
-    Optimizes performance by grouping requests with similar timestamp requirements
-    and processing them together. Supports both timestamped and non-timestamped
-    transcriptions in the same batch.
+    - Pure no-ts batch  → timestamps=False (no overhead)
+    - Pure ts batch     → timestamps=True
+    - Mixed batch       → timestamps=True + strip unused data (1 call instead of 2)
 
     Args:
         asr_model: ASR model instance to use for transcription
@@ -71,43 +71,23 @@ def process_batch_transcription(asr_model: Any,
     Returns:
         List of transcription results corresponding to input files
     """
-    # Check if input is tensor or file path
-    is_tensor_input = isinstance(audio_data[0], torch.Tensor)
-    
-    if not is_tensor_input:
-        # Convert Path objects to strings for ASR model compatibility
+    if not isinstance(audio_data[0], torch.Tensor):
         audio_data = [str(path) for path in audio_data]
 
-    # Separate requests by timestamp requirements for optimization
     ts_indices, no_ts_indices = get_timestamp_indices(timestamp_granularities)
 
-    # Initialize output array
-    outputs: List[Union[Any]] = [None] * len(timestamp_granularities)
+    # Pure no-ts: single GPU call without timestamps
+    if not ts_indices:
+        return asr_model.transcribe(audio=audio_data, enable_timestamps=False)
 
-    # Process files without timestamps (more efficient)
+    # Pure ts or mixed: single GPU call with timestamps
+    transcriptions = asr_model.transcribe(audio=audio_data, enable_timestamps=True)
+
+    # Mixed: strip timestamp data for requests that don't need it
     if no_ts_indices:
-        # Filter audio data for items without timestamp requirements
-        filtered_audio = [audio_data[i] for i in no_ts_indices]
-        # Transcribe batch without timestamps for faster processing
-        transcriptions = asr_model.transcribe(
-            audio=filtered_audio,
-            enable_timestamps=False
-        )
-        # Map results back to original request order
-        for local_idx, global_idx in enumerate(no_ts_indices):
-            outputs[global_idx] = transcriptions[local_idx]
+        no_ts_set = set(no_ts_indices)
+        for i in no_ts_set:
+            transcriptions[i].words = None
+            transcriptions[i].segments = None
 
-    # Process files with timestamps (word/segment level)
-    if ts_indices:
-        # Filter audio data for items without timestamp requirements
-        filtered_audio = [audio_data[i] for i in ts_indices]
-        # Transcribe batch without timestamps for faster processing
-        transcriptions = asr_model.transcribe(
-            audio=filtered_audio,
-            enable_timestamps=True
-        )
-        # Map results back to original request order
-        for local_idx, global_idx in enumerate(ts_indices):
-            outputs[global_idx] = transcriptions[local_idx]
-
-    return outputs
+    return transcriptions
