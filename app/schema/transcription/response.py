@@ -20,3 +20,4 @@ class TranscriptionResult(BaseModel):
     text :str
     words :Optional[List[TranscribedWord]] = None
     segments :Optional[List[TranscribedSegment]] = None
+    duration :Optional[float] = None

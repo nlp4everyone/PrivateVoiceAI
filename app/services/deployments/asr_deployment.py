@@ -11,8 +11,7 @@ from app.core.config.system import *
 from app.core.config.serving import *
 from app.core.config.asr import *
 # Utils
-from app.utils.audio import (load_audio_from_bytes,
-                             estimate_audio_duration)
+from app.utils.audio import load_audio_from_bytes
 from app.utils.transcription.helper import (get_transcription_type,
                                             process_batch_transcription)
 from app.utils.token_counter import approximate_count_tokens
@@ -99,12 +98,20 @@ class ASRService:
         Returns:
             List of transcription results
         """
-        # Convert audio bytes to tensors
-        audio_tensors = [load_audio_from_bytes(audio_bytes) for audio_bytes in batch]
-        # Process transcriptions
+        # torchaudio.load + resample is CPU-bound; offloading each item to a thread
+        # reduces wall-clock from sum(decode) to max(decode).
+        decoded = await asyncio.gather(
+            *[asyncio.to_thread(load_audio_from_bytes, audio_bytes) for audio_bytes in batch]
+        )
+        audio_tensors = [tensor for tensor, _ in decoded]
+        # Duration is derived from tensor shape to avoid re-parsing audio bytes later.
+        durations = [duration for _, duration in decoded]
+
         transcriptions = process_batch_transcription(asr_model=self._asr_model,
                                                      audio_data=audio_tensors,
                                                      timestamp_granularities=timestamp_granularities)
+        for result, duration in zip(transcriptions, durations):
+            result.duration = duration
         return transcriptions
 
     @asr_app.post("/v1/audio/transcriptions",
@@ -182,7 +189,7 @@ class ASRService:
         elif output_type == TranscriptionType.Word:
             # Word-level transcription with timestamps
             lang_property = LanguageDetector.detect(transcription_result.text, True)
-            duration = round(estimate_audio_duration(audio_bytes), 3)
+            duration = transcription_result.duration
 
             # Return transcription response
             return WordResponse(
@@ -196,7 +203,7 @@ class ASRService:
         elif output_type == TranscriptionType.Segment:
             # Segment-level transcription with timestamps
             lang_property = LanguageDetector.detect(transcription_result.text, True)
-            duration = round(estimate_audio_duration(audio_bytes), 3)
+            duration = transcription_result.duration
 
             # Build segment list with IDs
             segments = []

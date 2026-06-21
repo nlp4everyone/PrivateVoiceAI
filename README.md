@@ -155,8 +155,8 @@ Performance testing with `sample_vi.wav` (8s duration) using different batch siz
 | Batch Size | Max Time | Avg Time |
 |------------|----------|----------|
 | 1          |          | 0.295s   |
-| 4          | 0.388s   | 0.313s   |
-| 8          | 0.413s   | 0.325s   |
+| 4          | 0.352s   | 0.277s   |
+| 8          | 0.376s   | 0.292s   |
 
 <br />
 
