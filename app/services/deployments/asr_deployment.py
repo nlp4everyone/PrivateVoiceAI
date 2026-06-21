@@ -27,7 +27,7 @@ from app.exceptions.transcription import TranscriptedModelNotFoundException
 from app.exceptions.audio import UnsupportedAudioFormatException
 from app.exceptions.handlers import common_exception_handler
 # Other utils
-import logging, math, asyncio
+import logging, math, asyncio, functools, concurrent.futures
 from pathlib import Path
 
 logger = logging.getLogger("ray.serve")
@@ -80,6 +80,10 @@ class ASRService:
         if self._asr_model is None:
             raise RuntimeError(f"Failed to initialize ASR model: {ASR_MODEL_NAME}")
 
+        # Single-thread executor keeps GPU work pinned to one thread, avoiding
+        # CUDA context migration and pool contention from asyncio's default executor.
+        self._gpu_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
     @serve.batch(max_batch_size=MAX_BATCH_SIZE,
                  batch_wait_timeout_s=BATCH_WAIT_TIMEOUT_S)
     async def batched_transcribe(self,
@@ -107,9 +111,15 @@ class ASRService:
         # Duration is derived from tensor shape to avoid re-parsing audio bytes later.
         durations = [duration for _, duration in decoded]
 
-        transcriptions = process_batch_transcription(asr_model=self._asr_model,
-                                                     audio_data=audio_tensors,
-                                                     timestamp_granularities=timestamp_granularities)
+        transcriptions = await asyncio.get_event_loop().run_in_executor(
+            self._gpu_executor,
+            functools.partial(
+                process_batch_transcription,
+                asr_model=self._asr_model,
+                audio_data=audio_tensors,
+                timestamp_granularities=timestamp_granularities
+            )
+        )
         for result, duration in zip(transcriptions, durations):
             result.duration = duration
         return transcriptions
