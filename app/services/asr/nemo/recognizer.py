@@ -132,9 +132,23 @@ class ParakeetRecognizer(BaseRecognizer):
         # Normalize input to list format for consistent processing
         if isinstance(audio, (str, torch.Tensor)): audio = [audio]
 
+        # Sort tensors by length so NeMo's internal sub-batches group similar-duration
+        # audio together, minimizing padding waste across sub-batches.
+        if len(audio) > 1 and isinstance(audio[0], torch.Tensor):
+            order = sorted(range(len(audio)), key=lambda i: audio[i].shape[-1])
+            audio = [audio[i] for i in order]
+        else:
+            order = list(range(len(audio)))
+
         # Perform transcription with error handling
         try:
-            results = self.model.transcribe(audio, timestamps=enable_timestamps)
+            with torch.cuda.amp.autocast():
+                sorted_results = self.model.transcribe(audio, timestamps=enable_timestamps)
+
+            # Restore original order
+            results = [None] * len(order)
+            for rank, orig_idx in enumerate(order):
+                results[orig_idx] = sorted_results[rank]
 
             # Extract text from all results
             transcriptions = [result.text for result in results]
@@ -146,7 +160,7 @@ class ParakeetRecognizer(BaseRecognizer):
             # Process detailed timestamps when enabled
             detailed_word_timestamps = []
             detailed_segment_timestamps = []
-            
+
             # Extract word and segment timestamps from model results
             batched_word_timestamps = [result.timestamp['word'] for result in results]
             batched_segment_timestamps = [result.timestamp['segment'] for result in results]
