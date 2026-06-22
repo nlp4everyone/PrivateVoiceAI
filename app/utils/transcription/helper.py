@@ -55,18 +55,22 @@ def get_transcription_type(type: Union[str, None]) -> TranscriptionType:
 
 def process_batch_transcription(asr_model: Any,
                                 audio_data: Union[List[Path], List[torch.Tensor]],
-                                timestamp_granularities: List[Union[str, None]]) -> List[TranscriptionResult]:
+                                timestamp_granularities: List[Union[str, None]],
+                                split_mixed_batch: bool = True) -> List[TranscriptionResult]:
     """
     Transcribe multiple audio files in batch using a single GPU call.
 
-    - Pure no-ts batch  → timestamps=False (no overhead)
-    - Pure ts batch     → timestamps=True
-    - Mixed batch       → timestamps=True + strip unused data (1 call instead of 2)
+    - Pure no-ts batch  → 1 GPU call, timestamps=False
+    - Pure ts batch     → 1 GPU call, timestamps=True
+    - Mixed batch       → 2 GPU sub-calls (ts + no-ts) when split_mixed_batch=True,
+                          else 1 GPU call with timestamps=True and strip unused data
 
     Args:
         asr_model: ASR model instance to use for transcription
         audio_data: List of paths to audio files or list of audio tensors to transcribe
         timestamp_granularities: List specifying timestamp requirements for each file
+        split_mixed_batch: When True, mixed batches are split into two sub-calls to
+                           avoid GPU→CPU logit transfer and CPU alignment for no-ts items
 
     Returns:
         List of transcription results corresponding to input files
@@ -80,14 +84,28 @@ def process_batch_transcription(asr_model: Any,
     if not ts_indices:
         return asr_model.transcribe(audio=audio_data, enable_timestamps=False)
 
-    # Pure ts or mixed: single GPU call with timestamps
+    # Pure ts: single GPU call with timestamps
+    if not no_ts_indices:
+        return asr_model.transcribe(audio=audio_data, enable_timestamps=True)
+
+    # Mixed: split into two sub-batches so no-ts items skip GPU→CPU logit
+    # transfer and CPU alignment entirely
+    if split_mixed_batch:
+        results: List[TranscriptionResult] = [None] * len(audio_data)
+
+        ts_audio = [audio_data[i] for i in ts_indices]
+        for i, r in zip(ts_indices, asr_model.transcribe(audio=ts_audio, enable_timestamps=True)):
+            results[i] = r
+
+        no_ts_audio = [audio_data[i] for i in no_ts_indices]
+        for i, r in zip(no_ts_indices, asr_model.transcribe(audio=no_ts_audio, enable_timestamps=False)):
+            results[i] = r
+
+        return results
+
+    # Fallback: single GPU call with timestamps, strip unused data afterwards
     transcriptions = asr_model.transcribe(audio=audio_data, enable_timestamps=True)
-
-    # Mixed: strip timestamp data for requests that don't need it
-    if no_ts_indices:
-        no_ts_set = set(no_ts_indices)
-        for i in no_ts_set:
-            transcriptions[i].words = None
-            transcriptions[i].segments = None
-
+    for i in no_ts_indices:
+        transcriptions[i].words = None
+        transcriptions[i].segments = None
     return transcriptions

@@ -117,7 +117,8 @@ class ASRService:
                 process_batch_transcription,
                 asr_model=self._asr_model,
                 audio_data=audio_tensors,
-                timestamp_granularities=timestamp_granularities
+                timestamp_granularities=timestamp_granularities,
+                split_mixed_batch=SPLIT_MIXED_BATCH
             )
         )
         for result, duration in zip(transcriptions, durations):

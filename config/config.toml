@@ -14,4 +14,5 @@ BATCH_WAIT_TIMEOUT_S=0.1
 [asr]
 ASR_MODEL_NAME="nvidia/parakeet-ctc-0.6b-vi"
 ASR_DEVICE="auto"
+SPLIT_MIXED_BATCH=true
 
