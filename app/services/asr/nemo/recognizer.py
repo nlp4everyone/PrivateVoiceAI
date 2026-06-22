@@ -59,31 +59,27 @@ class ParakeetRecognizer(BaseRecognizer):
         # Validate model name is supported
         if model_name not in SUPPORTED_MODELS:
             logger.error(f"Model '{model_name}' is not supported. Supported models: {SUPPORTED_MODELS}")
-            # Fallback to default model name
             self._model_name = SUPPORTED_MODELS[0]
-            logger.warning(f"Using default ASR model: {self._model_name}")
-        else:
-            logger.info(f"Started ASR model:'{model_name}'")
-        
+            logger.warning(f"Falling back to default ASR model: {self._model_name}")
+
         # Define device - auto-detect CUDA availability if "auto" is specified
         if device == "auto":
             self._device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             self._device = device
-        
-        # Validate device availability and fallback to CPU if CUDA unavailable
+
         if self._device == "cuda" and not torch.cuda.is_available():
             logger.warning("CUDA not available, falling back to CPU")
             self._device = "cpu"
-        
-        # Initialize the pretrained NeMo ASR model
-        self.model = nemo_asr.models.ASRModel.from_pretrained(model_name= self._model_name)
-        
-        # Move model to appropriate device for inference
+
+        try:
+            self.model = nemo_asr.models.ASRModel.from_pretrained(model_name=self._model_name)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load ASR model '{self._model_name}': {e}") from e
+
         if self._device == "cuda":
             self.model = self.model.cuda()
-        
-        # Set model to evaluation mode for consistent inference
+
         self.model.eval()
 
     @property

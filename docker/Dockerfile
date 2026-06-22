@@ -66,4 +66,4 @@ COPY . /app
 EXPOSE 8000 8265
 
 # Run both dashboard and serve
-CMD ["bash", "-c", "ray start --head --dashboard-host=0.0.0.0 --dashboard-port=8265 && serve run app.app:deployment"]
+CMD ["bash", "-c", "ray start --head --dashboard-host=0.0.0.0 --dashboard-port=8265 > /tmp/ray_start.log 2>&1 || (cat /tmp/ray_start.log >&2; exit 1) && serve run app.app:deployment"]

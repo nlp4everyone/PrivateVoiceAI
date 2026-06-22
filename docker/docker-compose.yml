@@ -12,6 +12,8 @@ services:
       - RAY_memory_monitor_refresh_ms=0
       - RAY_object_store_memory=4294967296
       - RAY_DASHBOARD_HOST=0.0.0.0
+      - RAY_LOG_LEVEL=WARNING
+      - RAY_SERVE_LOG_TO_STDERR=1
     volumes:
       - ${HOME}/.cache/huggingface:/home/ray/.cache/huggingface
       - type: tmpfs

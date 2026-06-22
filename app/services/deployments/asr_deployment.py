@@ -30,6 +30,16 @@ from app.exceptions.handlers import common_exception_handler
 import logging, math, asyncio, functools, concurrent.futures
 from pathlib import Path
 
+# Suppress NeMo/Lightning verbose output in actor process (app.py runs in the
+# driver, not here — so those suppressions don't carry over).
+for _nemo_logger in ("nemo", "nemo_logger", "lightning", "pytorch_lightning",
+                     "filelock", "datasets", "huggingface_hub"):
+    logging.getLogger(_nemo_logger).setLevel(logging.ERROR)
+
+# Explicitly set to INFO in the actor process — ray.init(logging_level=WARNING)
+# in the driver does not carry over here, but Ray worker setup may still
+# override the level. Setting it here ensures INFO logs are visible in actors.
+logging.getLogger("ray.serve").setLevel(logging.INFO)
 logger = logging.getLogger("ray.serve")
 
 # Define tags metadata for API documentation
@@ -72,6 +82,11 @@ class ASRService:
         Sets up the ASR model.
         Raises RuntimeError if model initialization fails.
         """
+        # Ray Serve calls configure_component_logger() after module import,
+        # which may reset ray.serve to WARNING. Re-apply INFO here so factory
+        # logs are visible before model loading begins.
+        logging.getLogger("ray.serve").setLevel(logging.INFO)
+
         # Initialize ASR model using factory pattern with configuration
         self._asr_model = RecognizerFactory.create(model_name=ASR_MODEL_NAME,
                                                    device=ASR_DEVICE)
@@ -79,6 +94,12 @@ class ASRService:
         # Validate model initialization
         if self._asr_model is None:
             raise RuntimeError(f"Failed to initialize ASR model: {ASR_MODEL_NAME}")
+
+        logger.info(
+            f"ASRService ready | replicas={NUM_REPLICAS} "
+            f"max_ongoing_requests={MAX_ONGOING_REQUESTS} "
+            f"max_batch_size={MAX_BATCH_SIZE}"
+        )
 
         # Cache handle once — reusable across requests per Ray Serve docs.
         self._handle = serve.get_deployment_handle(DEPLOYMENT_NAME)
@@ -158,7 +179,7 @@ class ASRService:
         - `TranscriptedModelNotFoundException`: If requested model is not available
         - `ValueError`: If audio processing fails
         """
-        logger.info(f"ASR request received - model: {model}")
+        logger.debug(f"ASR request received - model: {model}")
 
         # Validate that requested model matches the loaded model
         # This ensures the client requests a model that is actually available

@@ -45,16 +45,12 @@ class RecognizerFactory:
             instance is stored at a time. Subsequent calls will replace the
             previous instance.
         """
-        if model_name.startswith("nvidia/parakeet"):
-            # Create Parakeet recognizer instance for supported models
-            self._recognizer = ParakeetRecognizer(model_name=model_name,
-                                                  device=device)
-        else:
-            logger.error(f"Unsupported model: {model_name}")
-            # Attempt to create Parakeet recognizer anyway (may fail if model is invalid)
-            self._recognizer = ParakeetRecognizer(model_name=model_name,
-                                                  device=device)
-            logger.warning(f"Using default ASR model: {self._recognizer.model_name}")
+        if not model_name.startswith("nvidia/parakeet"):
+            logger.error(f"Unsupported model: '{model_name}', falling back to default")
+
+        logger.info(f"Loading ASR model '{model_name}' on {device.upper()} ...")
+        self._recognizer = ParakeetRecognizer(model_name=model_name, device=device)
+        logger.info(f"ASR model '{self._recognizer.model_name}' loaded successfully on {self._recognizer._device.upper()}")
         return self._recognizer
     
     @classmethod
