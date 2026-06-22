@@ -38,7 +38,7 @@ def load_audio_from_bytes(audio_bytes: bytes,
     buffer = io.BytesIO(audio_bytes)
     waveform, sr = torchaudio.load(buffer)
 
-    waveform = waveform.mean(dim=0)  # [C, N] → [N], no-op for mono
+    waveform = waveform[0] if waveform.shape[0] == 1 else waveform.mean(dim=0)
 
     if sr != target_sr:
         waveform = _get_resampler(sr, target_sr)(waveform)

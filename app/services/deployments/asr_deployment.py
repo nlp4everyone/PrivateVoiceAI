@@ -80,6 +80,9 @@ class ASRService:
         if self._asr_model is None:
             raise RuntimeError(f"Failed to initialize ASR model: {ASR_MODEL_NAME}")
 
+        # Cache handle once — reusable across requests per Ray Serve docs.
+        self._handle = serve.get_deployment_handle(DEPLOYMENT_NAME)
+
         # Single-thread executor keeps GPU work pinned to one thread, avoiding
         # CUDA context migration and pool contention from asyncio's default executor.
         self._gpu_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
@@ -172,9 +175,7 @@ class ASRService:
             raise UnsupportedAudioFormatException(file_format=file_extension)
 
         # Get deployment handle and process transcription
-        handle = serve.get_deployment_handle(DEPLOYMENT_NAME)
-        # Get the result
-        transcription_result: TranscriptionResult = await handle.batched_transcribe.remote(
+        transcription_result: TranscriptionResult = await self._handle.batched_transcribe.remote(
             audio_bytes,
             timestamp_granularity
         )
@@ -185,7 +186,7 @@ class ASRService:
         # Return appropriate response format
         if output_type == TranscriptionType.Text:
             # Simple text transcription with token usage
-            output_tokens = await asyncio.to_thread(approximate_count_tokens, transcription_result.text)
+            output_tokens = approximate_count_tokens(transcription_result.text)
             # Return transcription response
             return TranscriptionResponse(
                 text=transcription_result.text,
@@ -211,7 +212,7 @@ class ASRService:
                 language=lang_property.language,
                 duration=duration,
                 usage=DurationUsage(seconds=math.ceil(duration)),
-                words=[word.model_dump() for word in transcription_result.words]
+                words=transcription_result.words
             )
 
         elif output_type == TranscriptionType.Segment:
