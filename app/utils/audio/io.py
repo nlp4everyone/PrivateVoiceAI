@@ -1,7 +1,13 @@
 from typing import Tuple, Union
+from functools import lru_cache
 import soundfile as sf
 import io, torch, torchaudio, magic
 magic_mime = magic.Magic(mime=True)
+
+
+@lru_cache(maxsize=8)
+def _get_resampler(sr_src: int, sr_tgt: int) -> torchaudio.transforms.Resample:
+    return torchaudio.transforms.Resample(sr_src, sr_tgt)
 
 def estimate_audio_duration(audio_bytes: bytes) -> float:
     """
@@ -35,8 +41,7 @@ def load_audio_from_bytes(audio_bytes: bytes,
     waveform = waveform.mean(dim=0)  # [C, N] → [N], no-op for mono
 
     if sr != target_sr:
-        resampler = torchaudio.transforms.Resample(sr, target_sr)
-        waveform = resampler(waveform)
+        waveform = _get_resampler(sr, target_sr)(waveform)
 
     duration = round(waveform.shape[-1] / target_sr, 3)
     return waveform, duration

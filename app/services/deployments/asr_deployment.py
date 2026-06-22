@@ -107,9 +107,12 @@ class ASRService:
         decoded = await asyncio.gather(
             *[asyncio.to_thread(load_audio_from_bytes, audio_bytes) for audio_bytes in batch]
         )
+        # Release raw bytes immediately — tensors are all we need from here on.
+        batch = None
         audio_tensors = [tensor for tensor, _ in decoded]
         # Duration is derived from tensor shape to avoid re-parsing audio bytes later.
         durations = [duration for _, duration in decoded]
+        decoded = None
 
         transcriptions = await asyncio.get_event_loop().run_in_executor(
             self._gpu_executor,
