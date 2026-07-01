@@ -1,4 +1,4 @@
-# PrivateVoiceAI
+# VoicePlatform
 
 Dịch vụ ASR (Nhận dạng giọng nói tự động) batch sẵn sàng production, cung cấp HTTP API tương thích OpenAI, xây dựng trên FastAPI và Ray Serve với các mô hình NVIDIA NeMo Parakeet.
 
@@ -58,8 +58,8 @@ TranscriptionResult  →  TranscriptionResponse / WordResponse / SegmentResponse
 ## Bắt đầu nhanh
 
 ```bash
-git clone https://github.com/nlp4everyone/PrivateVoiceAI.git
-cd PrivateVoiceAI/
+git clone https://github.com/nlp4everyone/VoicePlatform.git
+cd VoicePlatform/
 git fetch && git checkout ray/nvidia_asr
 cp .env.sample .env
 ```

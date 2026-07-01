@@ -135,7 +135,7 @@ All parameters live in `config/config.toml`. Changes require a container restart
 ## Repository Structure
 
 ```
-PrivateVoiceAI/
+VoicePlatform/
 ├── app/
 │   ├── app.py                          # Entry point: ray.init, serve.start, ASRService.bind
 │   ├── core/config/

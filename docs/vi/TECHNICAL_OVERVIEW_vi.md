@@ -135,7 +135,7 @@ Tất cả tham số nằm trong `config/config.toml`. Thay đổi yêu cầu re
 ## Cấu trúc thư mục
 
 ```
-PrivateVoiceAI/
+VoicePlatform/
 ├── app/
 │   ├── app.py                          # Entry point: ray.init, serve.start, ASRService.bind
 │   ├── core/config/

@@ -1,4 +1,4 @@
-# PrivateVoiceAI
+# VoicePlatform
 
 A production-ready batch ASR (Automatic Speech Recognition) service with an OpenAI-compatible HTTP API, built on FastAPI and Ray Serve with NVIDIA NeMo Parakeet models.
 
@@ -58,8 +58,8 @@ TranscriptionResult  →  TranscriptionResponse / WordResponse / SegmentResponse
 ## Quick Start
 
 ```bash
-git clone https://github.com/nlp4everyone/PrivateVoiceAI.git
-cd PrivateVoiceAI/
+git clone https://github.com/nlp4everyone/VoicePlatform.git
+cd VoicePlatform/
 git fetch && git checkout ray/nvidia_asr
 cp .env.sample .env
 ```
