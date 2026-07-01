@@ -1,4 +1,11 @@
 ray[serve]==2.50.0
+# Pinned exact: FastAPI 0.137.0 switched app.routes to a lazy `_IncludedRouter`
+# wrapper, and Starlette 1.0.0 did its own routing rewrite. ray==2.50.0's
+# vendored get_asgi_route_name.py assumes plain Route/Mount with a `.path`
+# attr, so either bump breaks it with AttributeError on every request.
+# Bump once Ray Serve ships a fix for this.
+fastapi==0.136.3
+starlette==0.52.1
 python-multipart==0.0.20
 # Config
 toml==0.10.2
