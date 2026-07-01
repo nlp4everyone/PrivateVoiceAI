@@ -1,4 +1,4 @@
-# 🎤 PrivateVoiceAI - Private Audio Transcription Service
+# 🎤 VoicePlatform - Private Audio Transcription Service
 
 A high-performance, privacy-focused audio transcription service powered by Qwen's Automatic Speech Recognition (ASR) model. This project provides a secure, local deployment solution for transcribing audio files without relying on cloud services, ensuring complete data privacy and control.
 
@@ -54,9 +54,9 @@ Built with vLLM for optimal performance and GPU acceleration, this service offer
 1. **Clone the repository**
    ```bash
    # Clone the repository
-   git clone https://github.com/nlp4everyone/PrivateVoiceAI.git
+   git clone https://github.com/nlp4everyone/VoicePlatform.git
    # Navigate to project directory
-   cd PrivateVoiceAI
+   cd VoicePlatform
    ```
 
 2. **Switch to the correct branch**
