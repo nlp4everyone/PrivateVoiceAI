@@ -21,11 +21,11 @@ TOML-based configuration system for system settings, serving parameters, and VAD
 
 Clone this project:
 ```
-git clone https://github.com/nlp4everyone/PrivateVoiceAI.git
+git clone https://github.com/nlp4everyone/VoicePlatform.git
 ```
 Go inside project:
 ```
-cd PrivateVoiceAI/
+cd VoicePlatform/
 ```
 Fetch all branches:
 ```
