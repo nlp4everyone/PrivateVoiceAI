@@ -1,12 +1,12 @@
 services:
   qwen-asr:
-    image: vllm/vllm-openai:v0.19.0
+    image: vllm/vllm-openai:v0.24.0
     container_name: qwen-asr-serve
     entrypoint: ["/bin/bash", "-c"]
     command: >
       "pip install vllm[audio] && 
       vllm serve ${MODEL_NAME:-Qwen/Qwen3-ASR-1.7B}
-      --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION:-0.8}
+      --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION:-0.6}
       --host ${VLLM_HOST:-0.0.0.0}
       --port ${VLLM_PORT:-8001}
       --download-dir ${DOWNLOAD_DIR:-/root/.cache/huggingface/hub}
